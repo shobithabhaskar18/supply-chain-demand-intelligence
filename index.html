@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Supply Chain Demand Intelligence Platform</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3250;
+      --accent: #e82127;   /* Tesla red */
+      --accent2: #3b82f6;
+      --accent3: #10b981;
+      --accent4: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --font: 'Segoe UI', system-ui, sans-serif;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface);
+    }
+    header h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: 0.02em; }
+    header h1 span { color: var(--accent); }
+    .badge { font-size: 0.7rem; background: var(--accent); color: #fff; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+
+    /* ── Layout ── */
+    main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+    .section-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 14px; font-weight: 600; }
+
+    /* ── KPI Cards ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 18px 20px; position: relative; overflow: hidden;
+    }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--accent-color, var(--accent));
+    }
+    .kpi-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .kpi-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .kpi-sub { font-size: 0.7rem; color: var(--muted); margin-top: 5px; }
+
+    /* ── Chart Grid ── */
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+    .chart-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px;
+    }
+    .chart-card h3 { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+    .chart-card p { font-size: 0.68rem; color: var(--muted); margin-bottom: 14px; }
+    .chart-card.full { grid-column: 1 / -1; }
+    svg text { font-family: var(--font); }
+
+    /* ── Tooltip ── */
+    .tooltip {
+      position: absolute; background: #1e2235; border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 14px; font-size: 0.75rem; pointer-events: none;
+      opacity: 0; transition: opacity 0.15s; z-index: 100; min-width: 140px;
+    }
+    .tooltip strong { display: block; font-size: 0.8rem; margin-bottom: 4px; color: var(--text); }
+    .tooltip span { color: var(--muted); }
+
+    /* ── Risk Badge ── */
+    .risk-high { color: #ef4444; font-weight: 700; }
+    .risk-med  { color: var(--accent4); font-weight: 600; }
+    .risk-low  { color: var(--accent3); font-weight: 600; }
+
+    /* ── Footer ── */
+    footer { text-align: center; padding: 20px; color: var(--muted); font-size: 0.7rem; border-top: 1px solid var(--border); margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<div class="tooltip" id="tooltip"></div>
+
+<header>
+  <h1>Supply Chain <span>Demand Intelligence</span> Platform</h1>
+  <span class="badge">LIVE DEMO</span>
+</header>
+
+<main>
+  <!-- KPI Row -->
+  <p class="section-title">Key Performance Indicators</p>
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <!-- Row 1: Demand Trend + Forecast -->
+  <div class="chart-grid">
+    <div class="chart-card full">
+      <h3>Monthly Demand Actuals vs. Forecast</h3>
+      <p>Historical sales trend with 6-month forward forecast — linear regression model</p>
+      <div id="chart-forecast"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Stockout Risk + Regional Delays -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Stock-Out Risk by Product Category</h3>
+      <p>High-risk SKUs requiring demand planning intervention</p>
+      <div id="chart-stockout"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Delivery Delay Rate by Region</h3>
+      <p>Late delivery % surfacing regional logistics bottlenecks</p>
+      <div id="chart-delay"></div>
+    </div>
+  </div>
+
+  <!-- Row 3: Seasonality + Supply-Demand Status -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Demand Seasonality Index</h3>
+      <p>Month-level demand index for supply planning cycles</p>
+      <div id="chart-seasonality"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Supply-Demand Gap: Revenue vs. Delay</h3>
+      <p>Scatter plot identifying high-revenue, high-delay risk zones</p>
+      <div id="chart-scatter"></div>
+    </div>
+  </div>
+</main>
+
+<footer>Supply Chain Demand Intelligence Platform · Built with D3.js · Shobitha Bhaskar</footer>
+
+<script>
+// ══════════════════════════════════════════════════
+//  SYNTHETIC DATA (mirrors real Kaggle supply chain)
+//  Replace with fetch('../data/forecast_output.json')
+//  after running the Python ETL pipeline
+// ══════════════════════════════════════════════════
+
+const KPIs = [
+  { label: "Total Revenue",       value: "$4.29M",  sub: "All time",          color: "#e82127" },
+  { label: "Avg Monthly Revenue", value: "$89.4K",  sub: "Rolling avg",       color: "#3b82f6" },
+  { label: "Units Sold",          value: "178,312", sub: "All categories",    color: "#10b981" },
+  { label: "Late Delivery Rate",  value: "28.4%",   sub: "Target < 10%",      color: "#f59e0b" },
+  { label: "Avg Profit Margin",   value: "11.2%",   sub: "Median across SKUs", color: "#8b5cf6" },
+];
+
+const MONTHLY_DEMAND = [
+  {period:"2020-01",actual:71200,forecast:null},{period:"2020-02",actual:68400,forecast:null},
+  {period:"2020-03",actual:74800,forecast:null},{period:"2020-04",actual:62100,forecast:null},
+  {period:"2020-05",actual:79300,forecast:null},{period:"2020-06",actual:85600,forecast:null},
+  {period:"2020-07",actual:91200,forecast:null},{period:"2020-08",actual:88400,forecast:null},
+  {period:"2020-09",actual:94700,forecast:null},{period:"2020-10",actual:102300,forecast:null},
+  {period:"2020-11",actual:118600,forecast:null},{period:"2020-12",actual:131400,forecast:null},
+  {period:"2021-01",actual:78900,forecast:null},{period:"2021-02",actual:75200,forecast:null},
+  {period:"2021-03",actual:83400,forecast:null},{period:"2021-04",actual:79800,forecast:null},
+  {period:"2021-05",actual:91200,forecast:null},{period:"2021-06",actual:97600,forecast:null},
+  {period:"2021-07",actual:104300,forecast:null},{period:"2021-08",actual:99800,forecast:null},
+  {period:"2021-09",actual:108700,forecast:null},{period:"2021-10",actual:115400,forecast:null},
+  {period:"2021-11",actual:134200,forecast:null},{period:"2021-12",actual:148700,forecast:null},
+  {period:"2022-01",actual:null,forecast:142000},{period:"2022-02",actual:null,forecast:148500},
+  {period:"2022-03",actual:null,forecast:155200},{period:"2022-04",actual:null,forecast:149800},
+  {period:"2022-05",actual:null,forecast:162400},{period:"2022-06",actual:null,forecast:171300},
+];
+
+const STOCKOUT = [
+  {category:"Technology",    risk:0.82, orders:3421, high_risk_pct:34.2},
+  {category:"Furniture",     risk:0.61, orders:2187, high_risk_pct:22.1},
+  {category:"Office Supplies",risk:0.38,orders:5832, high_risk_pct:12.4},
+  {category:"Appliances",    risk:0.74, orders:1243, high_risk_pct:29.8},
+  {category:"Clothing",      risk:0.29, orders:4102, high_risk_pct:8.7},
+];
+
+const REGIONAL = [
+  {region:"West Africa",   late_pct:42.1, revenue:312400},
+  {region:"Central Asia",  late_pct:38.7, revenue:287600},
+  {region:"South Asia",    late_pct:34.2, revenue:441200},
+  {region:"Western Europe",late_pct:18.4, revenue:612800},
+  {region:"North America", late_pct:12.1, revenue:784300},
+  {region:"East Asia",     late_pct:21.3, revenue:534100},
+];
+
+const SEASONALITY = [
+  {month:1,index:84},{month:2,index:80},{month:3,index:91},
+  {month:4,index:87},{month:5,index:98},{month:6,index:107},
+  {month:7,index:112},{month:8,index:108},{month:9,index:115},
+  {month:10,index:122},{month:11,index:142},{month:12,index:158},
+];
+
+const SCATTER = [
+  {category:"Technology",    revenue:1240000, delay:5.8, risk:"High"},
+  {category:"Furniture",     revenue:820000,  delay:4.2, risk:"High"},
+  {category:"Appliances",    revenue:460000,  delay:6.1, risk:"High"},
+  {category:"Office Supplies",revenue:1080000,delay:2.1, risk:"Low"},
+  {category:"Clothing",      revenue:690000,  delay:3.4, risk:"Medium"},
+];
+
+// ── Helpers ──
+const tt = d3.select("#tooltip");
+function showTip(html, event) {
+  tt.style("opacity",1).html(html)
+    .style("left",(event.pageX+14)+"px").style("top",(event.pageY-20)+"px");
+}
+function hideTip() { tt.style("opacity",0); }
+const fmt = d3.format(",.0f");
+const fmtK = v => v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : `$${(v/1000).toFixed(0)}K`;
+
+// ══════════════════════════════════════════════════
+//  KPI CARDS
+// ══════════════════════════════════════════════════
+const kpiGrid = d3.select("#kpi-grid");
+KPIs.forEach(k => {
+  const card = kpiGrid.append("div").attr("class","kpi-card")
+    .style("--accent-color", k.color);
+  card.append("div").attr("class","kpi-label").text(k.label);
+  card.append("div").attr("class","kpi-value").style("color", k.color).text(k.value);
+  card.append("div").attr("class","kpi-sub").text(k.sub);
+});
+
+// ══════════════════════════════════════════════════
+//  1. FORECAST LINE CHART
+// ══════════════════════════════════════════════════
+(function() {
+  const W = document.getElementById("chart-forecast").offsetWidth || 900;
+  const H = 260, mg = {top:20,right:20,bottom:50,left:70};
+  const w = W - mg.left - mg.right, h = H - mg.top - mg.bottom;
+
+  const svg = d3.select("#chart-forecast").append("svg")
+    .attr("width",W).attr("height",H)
+    .append("g").attr("transform",`translate(${mg.left},${mg.top})`);
+
+  const x = d3.scalePoint().domain(MONTHLY_DEMAND.map(d=>d.period)).range([0,w]);
+  const allVals = MONTHLY_DEMAND.map(d=>d.actual||d.forecast||0);
+  const y = d3.scaleLinear().domain([0, d3.max(allVals)*1.15]).range([h,0]);
+
+  // Grid
+  svg.append("g").attr("class","grid").call(
+    d3.axisLeft(y).tickSize(-w).tickFormat("").ticks(5)
+  ).selectAll("line").style("stroke","#2e3250").style("stroke-dasharray","3,3");
+  svg.select(".grid .domain").remove();
+
+  // Axes
+  const tickEvery = Math.ceil(MONTHLY_DEMAND.length / 10);
+  svg.append("g").attr("transform",`translate(0,${h})`)
+    .call(d3.axisBottom(x).tickValues(MONTHLY_DEMAND.filter((_,i)=>i%tickEvery===0).map(d=>d.period)))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px").attr("dy","1em");
+  svg.append("g").call(d3.axisLeft(y).ticks(5).tickFormat(v=>`$${(v/1000).toFixed(0)}K`))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px");
+  svg.selectAll(".domain").style("stroke","#2e3250");
+  svg.selectAll(".tick line").style("stroke","#2e3250");
+
+  // Forecast zone
+  const fcStart = MONTHLY_DEMAND.findIndex(d=>d.forecast!==null);
+  if(fcStart>0){
+    const fcData = MONTHLY_DEMAND.slice(fcStart-1);
+    svg.append("rect")
+      .attr("x", x(fcData[0].period)).attr("y",0)
+      .attr("width", w - x(fcData[0].period)).attr("height",h)
+      .attr("fill","#3b82f6").attr("opacity",0.05);
+    svg.append("text").attr("x",x(fcData[0].period)+6).attr("y",14)
+      .style("fill","#3b82f6").style("font-size","10px").text("▶ 6-Month Forecast");
+  }
+
+  // Actual line
+  const actual = MONTHLY_DEMAND.filter(d=>d.actual!==null);
+  const lineActual = d3.line().x(d=>x(d.period)).y(d=>y(d.actual)).curve(d3.curveMonotoneX);
+  svg.append("path").datum(actual).attr("fill","none")
+    .attr("stroke","#e82127").attr("stroke-width",2.5)
+    .attr("d",lineActual);
+
+  // Forecast line (dashed)
+  const fcast = MONTHLY_DEMAND.filter(d=>d.forecast!==null);
+  if(fcast.length){
+    const bridge = [...actual.slice(-1), ...fcast];
+    const lineFc = d3.line()
+      .x(d=>x(d.period))
+      .y(d=>y(d.actual!==null?d.actual:d.forecast))
+      .curve(d3.curveMonotoneX);
+    svg.append("path").datum(bridge).attr("fill","none")
+      .attr("stroke","#3b82f6").attr("stroke-width",2)
+      .attr("stroke-dasharray","6,3").attr("d",lineFc);
+  }
+
+  // Dots on actuals
+  svg.selectAll(".dot").data(actual).enter().append("circle")
+    .attr("cx",d=>x(d.period)).attr("cy",d=>y(d.actual)).attr("r",3)
+    .attr("fill","#e82127").attr("stroke","#0f1117").attr("stroke-width",1.5)
+    .on("mouseover",(event,d)=>showTip(`<strong>${d.period}</strong><span>Actual: $${fmt(d.actual)}</span>`,event))
+    .on("mouseout",hideTip);
+
+  // Legend
+  const lg = svg.append("g").attr("transform",`translate(${w-180},${h+36})`);
+  lg.append("line").attr("x1",0).attr("x2",18).attr("y1",0).attr("y2",0).attr("stroke","#e82127").attr("stroke-width",2.5);
+  lg.append("text").attr("x",22).attr("y",4).style("fill","#8892a4").style("font-size","10px").text("Actual Sales");
+  lg.append("line").attr("x1",100).attr("x2",118).attr("y1",0).attr("y2",0).attr("stroke","#3b82f6").attr("stroke-width",2).attr("stroke-dasharray","5,3");
+  lg.append("text").attr("x",122).attr("y",4).style("fill","#8892a4").style("font-size","10px").text("Forecast");
+})();
+
+// ══════════════════════════════════════════════════
+//  2. STOCK-OUT RISK HORIZONTAL BAR
+// ══════════════════════════════════════════════════
+(function() {
+  const W = document.getElementById("chart-stockout").offsetWidth || 440;
+  const H = 240, mg = {top:10,right:60,bottom:30,left:110};
+  const w = W - mg.left - mg.right, h = H - mg.top - mg.bottom;
+
+  const svg = d3.select("#chart-stockout").append("svg")
+    .attr("width",W).attr("height",H)
+    .append("g").attr("transform",`translate(${mg.left},${mg.top})`);
+
+  const data = [...STOCKOUT].sort((a,b)=>b.risk-a.risk);
+  const y = d3.scaleBand().domain(data.map(d=>d.category)).range([0,h]).padding(0.3);
+  const x = d3.scaleLinear().domain([0,1]).range([0,w]);
+
+  const color = d3.scaleLinear().domain([0,0.5,1]).range(["#10b981","#f59e0b","#ef4444"]);
+
+  svg.selectAll(".bar").data(data).enter().append("rect")
+    .attr("y",d=>y(d.category)).attr("height",y.bandwidth())
+    .attr("x",0).attr("width",0).attr("rx",3)
+    .attr("fill",d=>color(d.risk))
+    .on("mouseover",(event,d)=>showTip(`<strong>${d.category}</strong><span>Risk Score: ${d.risk}</span><br><span>High-Risk Orders: ${d.high_risk_pct}%</span>`,event))
+    .on("mouseout",hideTip)
+    .transition().duration(800).attr("width",d=>x(d.risk));
+
+  svg.selectAll(".val").data(data).enter().append("text")
+    .attr("y",d=>y(d.category)+y.bandwidth()/2+4)
+    .attr("x",d=>x(d.risk)+6).style("fill","#8892a4").style("font-size","10px")
+    .text(d=>d.risk.toFixed(2));
+
+  svg.append("g").call(d3.axisLeft(y)).selectAll("text").style("fill","#e2e8f0").style("font-size","10px");
+  svg.append("g").attr("transform",`translate(0,${h})`)
+    .call(d3.axisBottom(x).ticks(4).tickFormat(d3.format(".0%")))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px");
+  svg.selectAll(".domain").style("stroke","#2e3250");
+  svg.selectAll(".tick line").style("stroke","#2e3250");
+})();
+
+// ══════════════════════════════════════════════════
+//  3. DELIVERY DELAY RATE — HORIZONTAL BAR
+// ══════════════════════════════════════════════════
+(function() {
+  const W = document.getElementById("chart-delay").offsetWidth || 440;
+  const H = 240, mg = {top:10,right:60,bottom:30,left:110};
+  const w = W - mg.left - mg.right, h = H - mg.top - mg.bottom;
+
+  const svg = d3.select("#chart-delay").append("svg")
+    .attr("width",W).attr("height",H)
+    .append("g").attr("transform",`translate(${mg.left},${mg.top})`);
+
+  const data = [...REGIONAL].sort((a,b)=>b.late_pct-a.late_pct);
+  const y = d3.scaleBand().domain(data.map(d=>d.region)).range([0,h]).padding(0.3);
+  const x = d3.scaleLinear().domain([0,50]).range([0,w]);
+
+  svg.selectAll(".bar").data(data).enter().append("rect")
+    .attr("y",d=>y(d.region)).attr("height",y.bandwidth())
+    .attr("x",0).attr("width",0).attr("rx",3)
+    .attr("fill",(d,i)=>d3.schemeTableau10[i%10])
+    .on("mouseover",(event,d)=>showTip(`<strong>${d.region}</strong><span>Late Rate: ${d.late_pct}%</span><br><span>Revenue: ${fmtK(d.revenue)}</span>`,event))
+    .on("mouseout",hideTip)
+    .transition().duration(800).attr("width",d=>x(d.late_pct));
+
+  svg.selectAll(".val").data(data).enter().append("text")
+    .attr("y",d=>y(d.region)+y.bandwidth()/2+4)
+    .attr("x",d=>x(d.late_pct)+6).style("fill","#8892a4").style("font-size","10px")
+    .text(d=>d.late_pct+"%");
+
+  // 10% target line
+  svg.append("line").attr("x1",x(10)).attr("x2",x(10)).attr("y1",0).attr("y2",h)
+    .attr("stroke","#ef4444").attr("stroke-dasharray","4,3").attr("stroke-width",1.5);
+  svg.append("text").attr("x",x(10)+3).attr("y",-3)
+    .style("fill","#ef4444").style("font-size","9px").text("Target");
+
+  svg.append("g").call(d3.axisLeft(y)).selectAll("text").style("fill","#e2e8f0").style("font-size","10px");
+  svg.append("g").attr("transform",`translate(0,${h})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d=>d+"%"))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px");
+  svg.selectAll(".domain").style("stroke","#2e3250");
+  svg.selectAll(".tick line").style("stroke","#2e3250");
+})();
+
+// ══════════════════════════════════════════════════
+//  4. SEASONALITY INDEX — AREA CHART
+// ══════════════════════════════════════════════════
+(function() {
+  const W = document.getElementById("chart-seasonality").offsetWidth || 440;
+  const H = 220, mg = {top:10,right:20,bottom:30,left:55};
+  const w = W - mg.left - mg.right, h = H - mg.top - mg.bottom;
+
+  const svg = d3.select("#chart-seasonality").append("svg")
+    .attr("width",W).attr("height",H)
+    .append("g").attr("transform",`translate(${mg.left},${mg.top})`);
+
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const x = d3.scalePoint().domain(SEASONALITY.map(d=>months[d.month-1])).range([0,w]);
+  const y = d3.scaleLinear().domain([60,170]).range([h,0]);
+
+  // Gradient fill
+  const defs = svg.append("defs");
+  const grad = defs.append("linearGradient").attr("id","area-grad").attr("x1","0").attr("x2","0").attr("y1","0").attr("y2","1");
+  grad.append("stop").attr("offset","0%").attr("stop-color","#3b82f6").attr("stop-opacity",0.4);
+  grad.append("stop").attr("offset","100%").attr("stop-color","#3b82f6").attr("stop-opacity",0.02);
+
+  const area = d3.area().x(d=>x(months[d.month-1])).y0(h).y1(d=>y(d.index)).curve(d3.curveMonotoneX);
+  const line = d3.line().x(d=>x(months[d.month-1])).y(d=>y(d.index)).curve(d3.curveMonotoneX);
+
+  svg.append("path").datum(SEASONALITY).attr("fill","url(#area-grad)").attr("d",area);
+  svg.append("path").datum(SEASONALITY).attr("fill","none").attr("stroke","#3b82f6").attr("stroke-width",2.5).attr("d",line);
+
+  // 100 baseline
+  svg.append("line").attr("x1",0).attr("x2",w).attr("y1",y(100)).attr("y2",y(100))
+    .attr("stroke","#2e3250").attr("stroke-dasharray","4,4").attr("stroke-width",1);
+  svg.append("text").attr("x",w+3).attr("y",y(100)+4).style("fill","#6b7280").style("font-size","9px").text("100");
+
+  // Dots
+  svg.selectAll(".dot").data(SEASONALITY).enter().append("circle")
+    .attr("cx",d=>x(months[d.month-1])).attr("cy",d=>y(d.index)).attr("r",4)
+    .attr("fill",d=>d.index>115?"#e82127":d.index<85?"#10b981":"#3b82f6")
+    .attr("stroke","#0f1117").attr("stroke-width",1.5)
+    .on("mouseover",(event,d)=>showTip(`<strong>${months[d.month-1]}</strong><span>Index: ${d.index}</span><br><span>${d.index>115?"Peak Demand":d.index<85?"Low Demand":"Normal"}</span>`,event))
+    .on("mouseout",hideTip);
+
+  svg.append("g").attr("transform",`translate(0,${h})`).call(d3.axisBottom(x))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px");
+  svg.append("g").call(d3.axisLeft(y).ticks(5))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px");
+  svg.selectAll(".domain").style("stroke","#2e3250");
+  svg.selectAll(".tick line").style("stroke","#2e3250");
+})();
+
+// ══════════════════════════════════════════════════
+//  5. SUPPLY-DEMAND GAP SCATTER PLOT
+// ══════════════════════════════════════════════════
+(function() {
+  const W = document.getElementById("chart-scatter").offsetWidth || 440;
+  const H = 220, mg = {top:10,right:20,bottom:40,left:70};
+  const w = W - mg.left - mg.right, h = H - mg.top - mg.bottom;
+
+  const svg = d3.select("#chart-scatter").append("svg")
+    .attr("width",W).attr("height",H)
+    .append("g").attr("transform",`translate(${mg.left},${mg.top})`);
+
+  const x = d3.scaleLinear().domain([0, d3.max(SCATTER,d=>d.revenue)*1.1]).range([0,w]);
+  const y = d3.scaleLinear().domain([0, d3.max(SCATTER,d=>d.delay)*1.2]).range([h,0]);
+  const rScale = d3.scaleSqrt().domain([0, d3.max(SCATTER,d=>d.revenue)]).range([6,28]);
+  const colorMap = {"High":"#ef4444","Medium":"#f59e0b","Low":"#10b981"};
+
+  // Quadrant lines
+  const midX = d3.mean(SCATTER,d=>d.revenue), midY = d3.mean(SCATTER,d=>d.delay);
+  svg.append("line").attr("x1",x(midX)).attr("x2",x(midX)).attr("y1",0).attr("y2",h).attr("stroke","#2e3250").attr("stroke-dasharray","4,4");
+  svg.append("line").attr("x1",0).attr("x2",w).attr("y1",y(midY)).attr("y2",y(midY)).attr("stroke","#2e3250").attr("stroke-dasharray","4,4");
+
+  // Label quadrant
+  svg.append("text").attr("x",x(midX)+6).attr("y",10).style("fill","#ef4444").style("font-size","9px").text("⚠ High Revenue, High Delay");
+
+  svg.selectAll(".bubble").data(SCATTER).enter().append("circle")
+    .attr("cx",d=>x(d.revenue)).attr("cy",d=>y(d.delay))
+    .attr("r",0).attr("fill",d=>colorMap[d.risk]).attr("opacity",0.75)
+    .attr("stroke","#0f1117").attr("stroke-width",1.5)
+    .on("mouseover",(event,d)=>showTip(`<strong>${d.category}</strong><span>Revenue: ${fmtK(d.revenue)}</span><br><span>Avg Delay: ${d.delay} days</span><br><span>Risk: ${d.risk}</span>`,event))
+    .on("mouseout",hideTip)
+    .transition().duration(700).attr("r",d=>rScale(d.revenue));
+
+  svg.append("g").attr("transform",`translate(0,${h})`).call(d3.axisBottom(x).ticks(4).tickFormat(fmtK))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px");
+  svg.append("g").call(d3.axisLeft(y).ticks(5).tickFormat(d=>d+" d"))
+    .selectAll("text").style("fill","#8892a4").style("font-size","10px");
+  svg.selectAll(".domain").style("stroke","#2e3250");
+  svg.selectAll(".tick line").style("stroke","#2e3250");
+
+  // Axis labels
+  svg.append("text").attr("x",w/2).attr("y",h+36).attr("text-anchor","middle")
+    .style("fill","#6b7280").style("font-size","10px").text("Total Revenue →");
+  svg.append("text").attr("transform","rotate(-90)").attr("x",-h/2).attr("y",-52)
+    .attr("text-anchor","middle").style("fill","#6b7280").style("font-size","10px").text("Avg Delay (days) →");
+})();
+</script>
+</body>
+</html>
